@@ -16,6 +16,7 @@ int  count_words(char *, int, int);
 //add additional prototypes here
 void reverse_word(char *, int);
 void word_print(char *, int, int);
+int replaceWord(char *, char *, char *);
 
 int setup_buff(char *buff, char *user_str, int len){
     if(!user_str)
@@ -67,10 +68,11 @@ int setup_buff(char *buff, char *user_str, int len){
 }
 
 void print_buff(char *buff, int len){
-    printf("Buffer:  ");
+    printf("Buffer:  [");
     for (int i=0; i<len; i++){
         putchar(*(buff+i));
     }
+    putchar(']');
     putchar('\n');
 }
 
@@ -104,7 +106,6 @@ int count_words(char *buff, int len, int str_len){
 
         if(*buff==' ')
         {
-            //printf("uhh SPACE");
             start=1;
         }
         buff++;
@@ -117,9 +118,6 @@ int count_words(char *buff, int len, int str_len){
 void reverse_word(char *buff, int str_len)
 {
     char *ptr = buff+(str_len-1);
-
-    //printf("Reversing: %s, length: %d", buff, str_len);
-
     char *out = (char *)malloc(sizeof(char)*str_len);
     char *start = out;
     
@@ -170,7 +168,7 @@ void word_print(char *buff, int str_len, int words)
                 buff++;
                 cnt++;
             }
-            printf("%d. %s (%d)\n", n, startWord, cnt);
+            printf("%d. %s(%d)\n", n, startWord, cnt);
             if(n==words)
                 free(startWord);
         }
@@ -178,14 +176,99 @@ void word_print(char *buff, int str_len, int words)
         start=1;
         cnt=0;
         n++;    
-    }            
+    }           
+    putchar('\n'); 
     return;
+}
+
+int replaceWord(char *buff, char *repWord, char *newWord)
+{
+    /*
+      Scans for the first occurrence of repWord in buff,
+      replaces that occurrence with newWord, then copies result back to buff.
+      Returns 0 on success, or exits if out of buffer space.
+    */
+    char *BuffStart = buff;
+    char *foundPos = NULL;
+    char *newbuff = (char *)malloc(BUFFER_SZ*2);
+    char *Out = newbuff;
+    char *in = buff;
+
+
+    while (*BuffStart != '.' && *BuffStart != '\0') {
+        char *BuffTemp = BuffStart;
+        char *pRep = repWord;
+
+        while (*pRep != '\0' && *BuffTemp != '.' && *BuffTemp != '\0' && *BuffTemp == *pRep) {
+            BuffTemp++;
+            pRep++;
+        }
+        if (*pRep == '\0') {
+            foundPos = BuffStart;
+            break;
+        }
+        BuffStart++;
+    }
+    if (foundPos == NULL) {
+        free(newbuff);
+        return 0;
+    }
+
+    while (in < foundPos && (Out - newbuff) < (BUFFER_SZ - 1)) {
+        *Out = *in;
+        Out++;
+        in++;
+    }
+
+    char *Rep = newWord;
+    while (*Rep != '\0' && (Out - newbuff) < (BUFFER_SZ - 1)) {
+        *Out = *Rep;
+        Out++;
+        Rep++;
+    }
+
+    char *pTemp = repWord;
+    while (*pTemp != '\0') {
+        in++;
+        pTemp++;
+    }
+
+    while (*in != '\0') {
+
+        if ((Out - newbuff) >= (BUFFER_SZ - 1)) {
+            break;
+        }
+
+        if (*in == '.') {
+            in++;
+            continue;
+        }
+
+        *Out = *in;
+        Out++;
+        in++;
+    }
+
+    *Out = '\0';
+
+    char *tempBuff = newbuff;
+    char *orgBuff = buff;
+    while (*tempBuff != '\0' && (orgBuff - buff) < (BUFFER_SZ - 1)) {
+        *orgBuff = *tempBuff;
+        orgBuff++;
+        tempBuff++;
+    }
+
+    free(newbuff);
+    return 0;
 }
 
 int main(int argc, char *argv[]){
 
     char *buff;             //placehoder for the internal buffer
     char *input_string;     //holds the string provided by the user on cmd line
+    char *repWord;          // Word to be replaced in -x usage
+    char *newWord;          // Word to replace with in -x usage
     char opt;               //used to capture user option from cmd line
     int  rc;                //used for return codes
     int  user_str_len;      //length of user supplied string
@@ -220,12 +303,15 @@ int main(int argc, char *argv[]){
     }
 
     input_string = argv[2]; //capture the user input string
+    repWord = argv[3];
+    newWord = argv[4];
 
     //TODO:  #3 Allocate space for the buffer using malloc and
     //          handle error if malloc fails by exiting with a 
     //          return code of 99
     // CODE GOES HERE FOR #3
     buff = (char*)malloc(BUFFER_SZ*sizeof(char)); 
+
     if(buff==NULL)
     {
         exit(99);
@@ -236,7 +322,6 @@ int main(int argc, char *argv[]){
         printf("Error setting up buffer, error = %d", user_str_len);
         exit(2);
     }
-
     switch (opt){
         case 'c':
             rc = count_words(buff, BUFFER_SZ, user_str_len);  //you need to implement
@@ -257,6 +342,8 @@ int main(int argc, char *argv[]){
             word_print(buff, user_str_len, rc);
             break;
         case 'x':
+            rc = count_words(buff, BUFFER_SZ, user_str_len);
+            replaceWord(buff, repWord, newWord);
             break;
         default:
             usage(argv[0]);
@@ -264,7 +351,7 @@ int main(int argc, char *argv[]){
     }
 
     //TODO:  #6 Dont forget to free your buffer before exiting
-    print_buff(buff,BUFFER_SZ);
+    print_buff(buff, BUFFER_SZ);
     free(buff);
     exit(0);
 }
