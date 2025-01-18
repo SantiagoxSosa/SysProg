@@ -19,6 +19,7 @@ void word_print(char *, int, int);
 int replaceWord(char *, char *, char *);
 
 int setup_buff(char *buff, char *user_str, int len){
+    /* Function checks for right parameters, and if all is good, produces a buffer with no extra spaces or tabs, with '.' and final padding, not exceeding max size of BUFFER_SZ character */
     if(!user_str)
         return 0;
 
@@ -82,7 +83,7 @@ void usage(char *exename){
 }
 
 int count_words(char *buff, int len, int str_len){
-    
+    /* Functions counts the number of words in the string and outputs them to the terminal */
     int wrdcnt=0;
     int start = 1; // 1 if start of word, 0 if not
 
@@ -117,6 +118,7 @@ int count_words(char *buff, int len, int str_len){
 
 void reverse_word(char *buff, int str_len)
 {
+    /* Function takes in the buffer and length of string, and reverses the string which is outputted to the terminal */
     char *ptr = buff+(str_len-1);
     char *out = (char *)malloc(sizeof(char)*str_len);
     char *start = out;
@@ -134,6 +136,8 @@ void reverse_word(char *buff, int str_len)
 
 void word_print(char *buff, int str_len, int words)
 {
+    /* Function counts the length of each word and prints each one to the terminal with the length of each next to it */
+    
     int start = 1; // 1 if start of word, 0 if not
     int cnt = 0;
     int n=1;
