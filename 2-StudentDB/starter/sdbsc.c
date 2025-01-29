@@ -41,7 +41,6 @@ int open_db(char *dbFile, bool should_truncate){
         printf(M_ERR_DB_OPEN);
         return ERR_DB_FILE;
     }
-
     return fd;
 }
 
@@ -62,6 +61,8 @@ int get_student(int fd, int id, student_t *s){
     // seek for student
     int offset = id * 64;
     off_t newOffset = lseek(fd, offset, SEEK_SET);
+
+    // Return error if lseek error
     if (newOffset == (off_t)-1)
         return ERR_DB_FILE;
 
@@ -69,7 +70,7 @@ int get_student(int fd, int id, student_t *s){
 
     if(s!='\0')
         return 0;
-    else   
+    else
         return ERR_DB_FILE;
 }
 
@@ -99,8 +100,36 @@ int get_student(int fd, int id, student_t *s){
  *            
  */
 int add_student(int fd, int id, char *fname, char *lname, int gpa){
-    printf(M_NOT_IMPL);
-    return NOT_IMPLEMENTED_YET;
+
+    student_t *newStudent = malloc(STUDENT_RECORD_SIZE);
+    int offset = 64*id;
+    off_t seekplace = lseek(fd, offset, SEEK_SET);;
+
+    if (seekplace == (off_t)-1)
+        return ERR_DB_FILE;
+    
+
+    newStudent->id = id;
+    newStudent->gpa = gpa;
+    strcpy(newStudent->fname, fname); 
+    strcpy(newStudent->lname, lname);
+
+    student_t existingRecord;
+    ssize_t bytesRead = read(fd, &existingRecord, sizeof(student_t));
+    if (memcmp(&existingRecord, &EMPTY_STUDENT_RECORD, STUDENT_RECORD_SIZE) != 0) {
+        return ERR_DB_OP;
+    }
+
+    lseek(fd, offset, SEEK_SET);
+    ssize_t bytesWritten = write(fd, newStudent, sizeof(STUDENT_RECORD_SIZE));
+    if(bytesWritten==-1) {
+        free(newStudent);
+        return M_ERR_DB_WRITE;
+    }
+
+    free(newStudent);
+    printf(M_STD_ADDED);
+    return NO_ERROR;
 }
 
 /*
@@ -126,6 +155,7 @@ int add_student(int fd, int id, char *fname, char *lname, int gpa){
  *            
  */
 int del_student(int fd, int id){
+    
     printf(M_NOT_IMPL);
     return NOT_IMPLEMENTED_YET;
 }
