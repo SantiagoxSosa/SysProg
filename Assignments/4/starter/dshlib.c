@@ -54,11 +54,12 @@
 int exec_local_cmd_loop()
 {
     char *cmd_buff = malloc(ARG_MAX);
-    int rc = 0;
+    int rc = OK;
     cmd_buff_t cmd;
 
     // TODO IMPLEMENT MAIN LOOP
     while(1) {
+        cmd.argc = 0;
         printf("%s", SH_PROMPT);
         if (fgets(cmd_buff, ARG_MAX, stdin) == NULL) {
             printf("\n");
@@ -68,97 +69,122 @@ int exec_local_cmd_loop()
 
         //IMPLEMENT THE REST OF THE REQUIREMENTS
 
-        char *start = cmd_buff;
-        while(*start != SPACE_CHAR){
-            start++;
+        char *line = cmd_buff;
+        while (*line && isspace((unsigned char)*line)) {
+            line++;
         }
 
-        if(*start == '\0') {
-            continue;
+        if (*line == '\0') {
+            printf(CMD_WARN_NO_CMD);
+            continue;       
         }
 
-        char *end = start+strlen(start)-1;
-
-        while(end>start && end != SPACE_CHAR) {
+        char *end = line + strlen(line) - 1;
+        while (end > line && isspace((unsigned char)*end)) {
             *end = '\0';
             end--;
         }
 
         cmd.argc = 0;
-        char *foo = start;
+        cmd._cmd_buffer = line;
+        char *p = line;
 
-        while(!*foo) {
-            while(*foo == SPACE_CHAR) {
-                foo++;
+        while(*p) {
+            while (*p && *p == SPACE_CHAR) {
+                p++;
             }
-            if(!*foo) {
+            if (*p == '\0') 
                 break;
-            }
 
-            char *tok = NULL;
-            if(*foo = '"') {
-                foo++;
-                tok = foo;
-                while(*foo != '"' && *foo) {
-                    foo++;
+            //char *tok = NULL;
+            if (*p == '"') {
+                p++;
+                char *start = p;
+                while (*p && *p != '"') {
+                    p++;
                 }
+                if (*p == '"') {
+                    *p = '\0';
+                    p++; 
+                }
+                cmd.argv[cmd.argc] = strdup(start);
+                if (!cmd.argv[cmd.argc]) {
+                    free(cmd_buff);
+                    rc = ERR_MEMORY;
+                    return rc;
+                }
+                cmd.argc++;
             } 
             else {
-                tok = foo;
-                while(*foo != SPACE_CHAR && *foo) {
-                    foo++;
+                char *start = p;
+                while (*p && !(*p == SPACE_CHAR)) {
+                    p++;
                 }
-                if(*foo) {
-                    *foo = '\0';
-                    foo++;
+                char tok = *p;
+                *p = '\0';
+                cmd.argv[cmd.argc] = strdup(start);
+                if (!cmd.argv[cmd.argc]) {
+                    free(cmd_buff);
+                    rc = ERR_MEMORY;
+                    return rc;
                 }
-            }
-
-            if (cmd.argc < ARG_MAX) {
-                cmd.argv[cmd.argc] = strdup(tok);
                 cmd.argc++;
-            }
-            else {
+                if(tok != '\0') {
+                    p++;
+                }
+             }
+
+            if (cmd.argc >= ARG_MAX) {
                 rc = ERR_TOO_MANY_COMMANDS;
-                printf("CMD_ERR_PIPE_LIMIT\n");
                 break;
             }
+        }
+        cmd.argv[cmd.argc] = NULL;
+        if (cmd.argc == 0) {
+            printf(CMD_WARN_NO_CMD);
+            continue;
+        }
 
             if(cmd.argc == 0) {
                 continue;
             }
 
-            // Built in commands
+        // Built in commands
 
-            if(strcmp(cmd.argv[0], EXIT_CMD) == 0) {
-                rc = OK_EXIT;
-                free_cmd_buff(&cmd);
-                break;
+        if (strcmp(cmd.argv[0], EXIT_CMD) == 0) {
+            for (int i = 0; i < cmd.argc; i++) {
+                free(cmd.argv[i]);
             }
+            free(cmd_buff);
+            rc = OK_EXIT;
+            break;
+        }
 
-            if(strcmp(cmd.argv[0], "cd") == 0) {
-                if(cmd.argc > 1) {
-                    chdir(cmd.argv[1]);
+        if (strcmp(cmd.argv[0], "cd") == 0) {
+            if (cmd.argc > 1) {
+                if (chdir(cmd.argv[1]) != 0) {
+                    perror("cd");
                 }
-                continue;
             }
+            continue;
+        }
 
-            // For and exec
-
-            pid_t pid = fork();
-
-            if(pid == 0) {
-                execvp(cmd.argv[0], cmd.argv);
-                rc = ERR_EXEC_CMD;
-                printf("CMD_ERR_EXECUTE\n");
-                break;
+        // For and exec
+        pid_t pid = fork();
+        if (pid < 0) {
+            perror("fork");
+            for (int i = 0; i < cmd.argc; i++) {
+                free(cmd.argv[i]);
             }
-            else {
-                int status;
-                status = wiat(pid);
-            }
-
-            free_cmd_buff(&cmd);
+            continue;
+        }
+        if (pid == 0) {
+            execvp(cmd.argv[0], cmd.argv);
+            rc = ERR_EXEC_CMD;
+        } 
+        else {
+            int status;
+            wait(&status);
         }
     }
     // TODO IMPLEMENT parsing input to cmd_buff_t *cmd_buff
@@ -168,6 +194,6 @@ int exec_local_cmd_loop()
 
     // TODO IMPLEMENT if not built-in command, fork/exec as an external command
     // for example, if the user input is "ls -l", you would fork/exec the command "ls" with the arg "-l"
-
-    return OK;
+    rc = OK;
+    return rc;
 }
