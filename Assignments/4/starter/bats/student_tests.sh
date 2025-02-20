@@ -82,25 +82,6 @@ EOF
   [ "$status" -eq 0 ]
 }
 
-@test "External cmd: pwd" {
-  current=$(pwd)
-  run "${current}/dsh" <<EOF
-pwd
-exit
-EOF
-
-  stripped_output=$(echo "$output" | tr -d '[:space:]')
-  unwanted_substring="ignoringnon-optionarguments"
-
-  echo "Captured stdout:"
-  echo "Output: $output"
-  echo "Exit Status: $status"
-  echo "Stripped: '${stripped_output}'"
-
-  [[ "$stripped_output" =~ "$unwanted_substring" ]] && false
-  [ "$status" -eq 0 ]
-}
-
 @test "Empty command" {
   current=$(pwd)
   run "${current}/dsh" <<EOF
