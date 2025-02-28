@@ -32,6 +32,54 @@
  *  Standard Library Functions You Might Want To Consider Using
  *      memset(), strcmp(), strcpy(), strtok(), strlen(), strchr()
  */
+
+int build_cmd_list(char *cmd_line, command_list_t *clist) {
+    clist->num = 0;
+    char *saveptr;
+    char *token = strtok_r(cmd_line, PIPE_STRING, &saveptr);
+    while (token != NULL) {
+        // Trim leading whitespace.
+        while (*token && isspace((unsigned char)*token))
+            token++;
+        // Trim trailing whitespace.
+        char *end = token + strlen(token) - 1;
+        while (end > token && isspace((unsigned char)*end)) {
+            *end = '\0';
+            end--;
+        }
+        // Skip empty tokens.
+        if (strlen(token) == 0) {
+            token = strtok_r(NULL, PIPE_STRING, &saveptr);
+            continue;
+        }
+        if (clist->num >= CMD_MAX) {
+            fprintf(stderr, CMD_ERR_PIPE_LIMIT, CMD_MAX);
+            return ERR_TOO_MANY_COMMANDS;
+        }
+
+        // Initialize current command in the command list.
+        cmd_buff_t *cmd = &clist->commands[clist->num];
+        cmd->argc = 0;
+        cmd->_cmd_buffer = token;
+
+        // Tokenize the command using whitespace.
+        char *arg_saveptr;
+        char *arg = strtok_r(token, " ", &arg_saveptr);
+        while (arg != NULL && cmd->argc < CMD_ARGV_MAX - 1) {
+            cmd->argv[cmd->argc] = arg;
+            cmd->argc++;
+            arg = strtok_r(NULL, " ", &arg_saveptr);
+        }
+        cmd->argv[cmd->argc] = NULL;
+
+        clist->num++;
+        token = strtok_r(NULL, PIPE_STRING, &saveptr);
+    }
+    if (clist->num == 0)
+        return WARN_NO_CMDS;
+    return OK;
+}
+
 int build_cmd_list(char *cmd_line, command_list_t *clist) {
     clist->num = 0;
     memset(clist->commands, 0, sizeof(clist->commands));
