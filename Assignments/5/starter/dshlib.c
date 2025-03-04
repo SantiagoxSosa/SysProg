@@ -59,11 +59,11 @@ int build_cmd_list(char *cmd_line, command_list_t *clist) {
     char *token = strtok_r(cmd_line, PIPE_STRING, &saveptr);
     while (token != NULL) {
         // Trim leading whitespace.
-        while (*token && isspace((unsigned char)*token))
+        while (*token && *token == SPACE_CHAR)
             token++;
         // Trim trailing whitespace.
         char *end = token + strlen(token) - 1;
-        while (end > token && isspace((unsigned char)*end)) {
+        while (end > token && *end == SPACE_CHAR) {
             *end = '\0';
             end--;
         }
@@ -95,17 +95,9 @@ int build_cmd_list(char *cmd_line, command_list_t *clist) {
     return OK;
 }
 
-/*
- * exec_local_cmd_loop:
- * This function implements the main shell loop. It reads a command line from
- * the user, parses it into individual commands (possibly piped), and then
- * executes each command in a separate process. Pipes are used to connect the
- * standard output of one command to the standard input of the next.
- */
 int exec_local_cmd_loop() {
     char *cmd_buff = malloc(ARG_MAX);
     if (!cmd_buff) {
-        perror("malloc");
         return ERR_MEMORY;
     }
     int rc = OK;
@@ -121,7 +113,7 @@ int exec_local_cmd_loop() {
 
         // Trim leading whitespace.
         char *trimmed = cmd_buff;
-        while (*trimmed && isspace((unsigned char)*trimmed))
+        while (*trimmed && *trimmed == SPACE_CHAR)
             trimmed++;
 
         if (*trimmed == '\0') {
@@ -146,7 +138,6 @@ int exec_local_cmd_loop() {
             if (strcmp(clist.commands[0].argv[0], "cd") == 0) {
                 if (clist.commands[0].argc > 1) {
                     if (chdir(clist.commands[0].argv[1]) != 0) {
-                        perror("cd");
                     }
                 }
                 continue;
@@ -159,7 +150,6 @@ int exec_local_cmd_loop() {
         int pipefds[2 * num_pipes];
         for (int i = 0; i < num_pipes; i++) {
             if (pipe(pipefds + i * 2) < 0) {
-                perror("pipe");
                 rc = ERR_EXEC_CMD;
                 break;
             }
@@ -175,7 +165,6 @@ int exec_local_cmd_loop() {
         for (int i = 0; i < num_cmds; i++) {
             pids[i] = fork();
             if (pids[i] < 0) {
-                perror("fork");
                 rc = ERR_EXEC_CMD;
                 break;
             }
@@ -184,14 +173,12 @@ int exec_local_cmd_loop() {
                 // For non-first commands, redirect STDIN to the previous pipe's read end.
                 if (i > 0) {
                     if (dup2(pipefds[(i - 1) * 2], STDIN_FILENO) < 0) {
-                        perror("dup2");
                         exit(ERR_EXEC_CMD);
                     }
                 }
                 // For non-last commands, redirect STDOUT to the current pipe's write end.
                 if (i < num_cmds - 1) {
                     if (dup2(pipefds[i * 2 + 1], STDOUT_FILENO) < 0) {
-                        perror("dup2");
                         exit(ERR_EXEC_CMD);
                     }
                 }
@@ -201,7 +188,6 @@ int exec_local_cmd_loop() {
                 }
                 // Execute the command using its parsed argv.
                 execvp(clist.commands[i].argv[0], clist.commands[i].argv);
-                perror("execvp");
                 exit(ERR_EXEC_CMD);
             }
             forked++;
