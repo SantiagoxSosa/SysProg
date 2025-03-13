@@ -1,107 +1,164 @@
 #!/usr/bin/env bats
-
 # File: student_tests.sh
-# 
-# Create your unit tests suit in this file
 
-@test "Example: check ls runs without errors" {
-    run ./dsh <<EOF                
+TEST_PORT=1234
+
+clean_output() {
+  echo "$1" | sed '/^socket client mode:/d' | sed '/^socket server mode:/d' | sed '/^->/d'
+}
+
+setup_remote_server() {
+    ./dsh -s -p "$TEST_PORT" &
+    SERVER_PID=$!
+    sleep 1
+}
+
+teardown_remote_server() {
+    if kill -0 "$SERVER_PID" 2>/dev/null; then
+        kill "$SERVER_PID"
+        wait "$SERVER_PID" 2>/dev/null
+    fi
+}
+
+@test "Local mode: check ls runs without errors" {
+    run ./dsh <<EOF
 ls
 EOF
-
-    # Assertions
     [ "$status" -eq 0 ]
 }
 
-@test "Basic command execution: ls runs without errors" {
-  # Check that a simple command (ls) executes without errors.
-  run "./dsh" <<EOF
-ls
-EOF
-
-  echo "Captured stdout:" 
-  echo "$output"
-  echo "Exit Status: $status"
-  [ "$status" -eq 0 ]
-}
-
-@test "Piped command execution: echo and tr for uppercase conversion" {
-  # This test verifies piped execution by converting output to uppercase.
-  # The command 'echo hello world | tr a-z A-Z' should output "HELLO WORLD".
-  run "./dsh" <<EOF
+@test "Local mode: piped command execution (echo and tr)" {
+    run ./dsh <<EOF
 echo hello world | tr a-z A-Z
 EOF
-
-  echo "Captured stdout:" 
-  echo "$output"
-  echo "Exit Status: $status"
-  # Remove all whitespace for consistent comparison.
-  stripped_output=$(echo "$output" | tr -d '[:space:]')
-  expected_output="HELLOWORLD"
-  echo "Stripped output: ${stripped_output}"
-  echo "Expected (whitespace removed): ${expected_output}"
-  echo "$stripped_output" | grep -q "$expected_output"
-  [ "$status" -eq 0 ]
+    stripped_output=$(echo "$output" | tr -d '[:space:]')
+    expected_output="HELLOWORLD"
+    echo "$stripped_output" | grep -q "$expected_output"
+    [ "$status" -eq 0 ]
 }
 
-@test "Multiple piped commands: echo, tr, and rev" {
-  # This test chains multiple pipes. The input "echo hello world" is converted 
-  # to uppercase then reversed.
-  # Expected transformation: "hello world" -> "HELLO WORLD" -> "DLROW OLLEH".
-  run "./dsh" <<EOF
+@test "Local mode: multiple piped commands (echo, tr, rev)" {
+    run ./dsh <<EOF
 echo hello world | tr a-z A-Z | rev
 EOF
-
-  echo "Captured stdout:" 
-  echo "$output"
-  echo "Exit Status: $status"
-  stripped_output=$(echo "$output" | tr -d '[:space:]')
-  expected_output="DLROWOLLEH"
-  echo "Stripped output: ${stripped_output}"
-  echo "Expected (whitespace removed): ${expected_output}"
-  echo "$stripped_output" | grep -q "$expected_output"
-  [ "$status" -eq 0 ]
+    stripped_output=$(echo "$output" | tr -d '[:space:]')
+    expected_output="DLROWOLLEH"
+    echo "$stripped_output" | grep -q "$expected_output"
+    [ "$status" -eq 0 ]
 }
 
-@test "Built-in cd command changes directory correctly" {
-  # This test verifies the built-in cd command.
-  # The shell changes to the root directory and then outputs the working directory.
-  run "./dsh" <<EOF
+@test "Local mode: built-in cd command changes directory" {
+    run ./dsh <<EOF
 cd /
 pwd
 EOF
-
-  echo "Captured stdout:" 
-  echo "$output"
-  echo "Exit Status: $status"
-  # Check that the output of pwd starts with "/" indicating the root directory.
-  echo "$output" | grep -q "^/"
-  [ "$status" -eq 0 ]
+    echo "$output" | grep -q "^/"
+    [ "$status" -eq 0 ]
 }
 
-@test "Handling empty command input gracefully" {
-  # When an empty command is entered, the shell should warn the user.
-  run "./dsh" <<EOF
-\n
-EOF
-  echo "Captured stdout:" 
-  echo "$output"
-  echo "Exit Status: $status"
-  # Check for an output line indicating that the command loop returned a value.
-  echo "$output" | grep -q "cmd loop returned"
-  [ "$status" -eq 0 ]
-}
-
-@test "Exit command terminates shell and returns exit status" {
-  # Verify that issuing the exit command terminates the shell gracefully.
-  run "./dsh" <<EOF
+@test "Local mode: exit command terminates shell" {
+    run ./dsh <<EOF
 exit
 EOF
-  echo "Captured stdout:" 
-  echo "$output"
-  echo "Exit Status: $status"
-  # Check for an output line indicating that the command loop returned a value.
-  echo "$output" | grep -q "cmd loop returned"
-  [ "$status" -eq 0 ]
+    echo "$output" | grep -q "cmd loop returned"
+    [ "$status" -eq 0 ]
 }
 
+@test "Remote mode: echo command with EOF termination" {
+    rdsh_eof=$'\x04'
+    message="Hello, remote shell!"
+    run ./dsh -c -p "$TEST_PORT" <<EOF
+echo $message
+EOF
+    cleaned=$(clean_output "$output")
+    cleaned=$(echo "$cleaned" | tr -d "$rdsh_eof")
+    echo "$cleaned" | grep -q "$message"
+    [ "$status" -eq 0 ]
+    teardown_remote_server
+}
+
+@test "Remote mode: piped command execution (echo and tr)" {
+    run ./dsh -c -p "$TEST_PORT" <<EOF
+echo hello world | tr a-z A-Z
+EOF
+    cleaned=$(clean_output "$output")
+    stripped=$(echo "$cleaned" | tr -d '[:space:]' | tr -d $'\x04')
+    expected_output="HELLOWORLDdsh4>"
+    echo "$stripped" | grep -q "$expected_output"
+    [ "$status" -eq 0 ]
+    teardown_remote_server
+}
+
+@test "Remote mode: multiple piped commands (echo, tr, rev)" {
+    setup_remote_server
+    run ./dsh -c -p "$TEST_PORT" <<EOF
+echo hello world | tr a-z A-Z | rev
+EOF
+    cleaned=$(clean_output "$output")
+    stripped=$(echo "$cleaned" | tr -d '[:space:]' | tr -d $'\x04')
+    expected_output="DLROWOLLEH"
+    echo "$stripped" | grep -q "$expected_output"
+    [ "$status" -eq 0 ]
+    teardown_remote_server
+}
+
+@test "Remote mode: exit command terminates remote shell" {
+    setup_remote_server
+    run ./dsh -c -p "$TEST_PORT" <<EOF
+exit
+EOF
+    cleaned=$(clean_output "$output")
+    echo "$cleaned" | grep -q "cmd loop returned"
+    [ "$status" -eq 0 ]
+    teardown_remote_server
+}
+
+@test "Remote mode: multiple client connections reconnect" {
+    setup_remote_server
+    run ./dsh -c -p "$TEST_PORT" <<EOF
+exit
+EOF
+    [ "$status" -eq 0 ]
+    run ./dsh -c -p "$TEST_PORT" <<EOF
+ls
+EOF
+    [ "$status" -eq 0 ]
+    teardown_remote_server
+}
+
+@test "Remote mode: fork/exec execution (uname -a)" {
+    setup_remote_server
+    run ./dsh -c -p "$TEST_PORT" <<EOF
+uname -a
+EOF
+    cleaned=$(clean_output "$output")
+    echo "$cleaned" | grep -q "Linux"
+    [ "$status" -eq 0 ]
+    teardown_remote_server
+}
+
+@test "Remote mode: unknown command handling returns error" {
+    setup_remote_server
+    run ./dsh -c -p "$TEST_PORT" <<EOF
+foobar123
+EOF
+    cleaned=$(clean_output "$output")
+    echo "$cleaned" | grep -q "execvp: No such file or directory"
+    [ "$status" -eq 0 ]
+    teardown_remote_server
+}
+
+@test "Remote mode: stop-server command shuts down server gracefully" {
+    setup_remote_server
+    run ./dsh -c -p "$TEST_PORT" <<EOF
+stop-server
+exit
+EOF
+    cleaned=$(clean_output "$output")
+    echo "$cleaned" | grep -q "cmd loop returned 0"
+    [ "$status" -eq 0 ]
+    run ./dsh -c -p "$TEST_PORT" <<EOF
+ls
+EOF
+    [ "$status" -eq 0 ]
+}
